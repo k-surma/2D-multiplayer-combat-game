@@ -1,6 +1,7 @@
+using Unity.Netcode;
 using UnityEngine;
 
-public class PlayerMovement : MonoBehaviour
+public class PlayerMovement : NetworkBehaviour
 {
     private float horizontal;
     private float speed = 8f;
@@ -13,8 +14,13 @@ public class PlayerMovement : MonoBehaviour
     [SerializeField] private Transform groundCheck;
     [SerializeField] private LayerMask groundLayer;
 
+
+
     void Update()
     {
+
+        if (!IsOwner) return;
+
         horizontal = Input.GetAxisRaw("Horizontal");
 
         // Log the horizontal movement for debugging
