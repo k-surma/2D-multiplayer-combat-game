@@ -7,74 +7,206 @@ public class PlayerMovement : NetworkBehaviour
     private float speed = 8f;
     private float jumpingPower = 16f;
     private bool isFacingRight = true;
-    private int jumpCount; // Tracks the number of jumps
-    private int maxJumps = 2; // Maximum allowed jumps
+    private int jumpCount;
+    private int maxJumps = 2;
 
     [SerializeField] private Rigidbody2D rb;
     [SerializeField] private Transform groundCheck;
     [SerializeField] private LayerMask groundLayer;
 
+    private NetworkVariable<bool> isFacingRightNetwork = new NetworkVariable<bool>(true);
 
+    private void Start()
+    {
+        if (!IsOwner) return;
+
+        // Subscribe to facing direction changes
+        isFacingRightNetwork.OnValueChanged += (oldValue, newValue) =>
+        {
+            Vector3 localScale = transform.localScale;
+            localScale.x = newValue ? Mathf.Abs(localScale.x) : -Mathf.Abs(localScale.x);
+            transform.localScale = localScale;
+        };
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        // Apply the current facing direction on spawn
+        Vector3 localScale = transform.localScale;
+        localScale.x = isFacingRightNetwork.Value ? Mathf.Abs(localScale.x) : -Mathf.Abs(localScale.x);
+        transform.localScale = localScale;
+    }
 
     void Update()
     {
-
         if (!IsOwner) return;
 
         horizontal = Input.GetAxisRaw("Horizontal");
 
-        // Log the horizontal movement for debugging
-        //Debug.Log($"Horizontal Input: {horizontal}");
-
         if (Input.GetButtonDown("Jump") && jumpCount < maxJumps)
         {
-            // Perform the jump and log the details
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpingPower);
             jumpCount++;
-            //Debug.Log($"Jump! Count: {jumpCount}, Velocity: {rb.linearVelocity}");
         }
 
         if (Input.GetButtonUp("Jump") && rb.linearVelocity.y > 0f)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
-            Debug.Log($"Jump button released, reducing upward velocity: {rb.linearVelocity}");
         }
 
         Flip();
 
-        // Reset jump count when grounded
         if (IsGrounded())
         {
-            //if (jumpCount > 0) Debug.Log("Player grounded. Resetting jump count.");
             jumpCount = 0;
         }
     }
 
     private void FixedUpdate()
     {
-        // Apply horizontal movement and log it
         rb.linearVelocity = new Vector2(horizontal * speed, rb.linearVelocity.y);
-        Debug.Log($"FixedUpdate -> Velocity: {rb.linearVelocity}");
     }
 
     private bool IsGrounded()
     {
-        // Checks if the player is touching the ground and logs the result
-        bool grounded = Physics2D.OverlapCircle(groundCheck.position, 0.5f, groundLayer);
-        Debug.Log($"IsGrounded: {grounded}");
-        return grounded;
+        return Physics2D.OverlapCircle(groundCheck.position, 0.5f, groundLayer);
     }
 
     private void Flip()
     {
-        if (isFacingRight && horizontal < 0f || !isFacingRight && horizontal > 0f)
+        if ((isFacingRight && horizontal < 0f) || (!isFacingRight && horizontal > 0f))
         {
             isFacingRight = !isFacingRight;
-            Vector3 localScale = transform.localScale;
-            localScale.x *= -1f;
-            transform.localScale = localScale;
-            //Debug.Log($"Player flipped. FacingRight: {isFacingRight}");
+
+            if (IsOwner)
+            {
+                // Update the NetworkVariable
+                SetFacingDirectionServerRpc(isFacingRight);
+            }
         }
+    }
+
+    [ServerRpc]
+    private void SetFacingDirectionServerRpc(bool facingRight)
+    {
+        isFacingRightNetwork.Value = facingRight;
     }
 }
 
+
+
+//code to try out the smoothness
+
+/*using Unity.Netcode;
+using UnityEngine;
+
+public class PlayerMovement : NetworkBehaviour
+{
+    private float horizontal;
+    private float speed = 8f;
+    private float jumpingPower = 16f;
+    private bool isFacingRight = true;
+    private int jumpCount;
+    private int maxJumps = 2;
+
+    [SerializeField] private Rigidbody2D rb;
+    [SerializeField] private Transform groundCheck;
+    [SerializeField] private LayerMask groundLayer;
+
+    private NetworkVariable<bool> isFacingRightNetwork = new NetworkVariable<bool>(true);
+    private float targetScaleX;
+
+    private void Start()
+    {
+        if (!IsOwner) return;
+
+        // Initialize the target scale
+        targetScaleX = transform.localScale.x;
+
+        // Subscribe to facing direction changes
+        isFacingRightNetwork.OnValueChanged += (oldValue, newValue) =>
+        {
+            targetScaleX = newValue ? Mathf.Abs(transform.localScale.x) : -Mathf.Abs(transform.localScale.x);
+        };
+    }
+
+    public override void OnNetworkSpawn()
+    {
+        base.OnNetworkSpawn();
+
+        // Apply the initial flip state
+        targetScaleX = isFacingRightNetwork.Value ? Mathf.Abs(transform.localScale.x) : -Mathf.Abs(transform.localScale.x);
+        transform.localScale = new Vector3(targetScaleX, transform.localScale.y, transform.localScale.z);
+    }
+
+    private void Update()
+    {
+        if (!IsOwner)
+        {
+            // Smoothly interpolate the local scale on non-owners
+            Vector3 localScale = transform.localScale;
+            localScale.x = Mathf.Lerp(localScale.x, targetScaleX, Time.deltaTime * 10f); // Adjust smoothing speed
+            transform.localScale = localScale;
+        }
+
+        if (!IsOwner) return;
+
+        horizontal = Input.GetAxisRaw("Horizontal");
+
+        if (Input.GetButtonDown("Jump") && jumpCount < maxJumps)
+        {
+            rb.velocity = new Vector2(rb.velocity.x, jumpingPower);
+            jumpCount++;
+        }
+
+        if (Input.GetButtonUp("Jump") && rb.velocity.y > 0f)
+        {
+            rb.velocity = new Vector2(rb.velocity.x, rb.velocity.y * 0.5f);
+        }
+
+        Flip();
+
+        if (IsGrounded())
+        {
+            jumpCount = 0;
+        }
+    }
+
+    private void FixedUpdate()
+    {
+        rb.velocity = new Vector2(horizontal * speed, rb.velocity.y);
+    }
+
+    private bool IsGrounded()
+    {
+        return Physics2D.OverlapCircle(groundCheck.position, 0.5f, groundLayer);
+    }
+
+    private void Flip()
+    {
+        if ((isFacingRight && horizontal < 0f) || (!isFacingRight && horizontal > 0f))
+        {
+            isFacingRight = !isFacingRight;
+
+            if (IsOwner)
+            {
+                // Update the NetworkVariable
+                SetFacingDirectionServerRpc(isFacingRight);
+            }
+        }
+    }
+
+    private void UpdateFlipState(bool facingRight)
+    {
+        targetScaleX = facingRight ? Mathf.Abs(transform.localScale.x) : -Mathf.Abs(transform.localScale.x);
+    }
+
+    [ServerRpc]
+    private void SetFacingDirectionServerRpc(bool facingRight)
+    {
+        isFacingRightNetwork.Value = facingRight;
+    }
+}
+*/
