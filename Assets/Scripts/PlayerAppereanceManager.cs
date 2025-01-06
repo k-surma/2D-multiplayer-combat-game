@@ -1,59 +1,59 @@
+// zarz¹dzanie wygl¹dem gracza w grze 2D
+
 using Unity.Netcode;
 using UnityEngine;
 
 public class PlayerAppearanceManager : NetworkBehaviour
 {
-    [SerializeField] private SpriteRenderer spriteRenderer; // For 2D games
-    [SerializeField] private Sprite[] sprites;             // Array of sprites for different appearances
+    [SerializeField] private SpriteRenderer spriteRenderer; // komponent renderuj¹cy grafikê gracza
+    [SerializeField] private Sprite[] sprites;             // tablica mo¿liwych wygl¹dów (sprite'ów)
 
-    private NetworkVariable<int> appearanceIndex = new NetworkVariable<int>(0);
-
-    private void Start()
-    {
-        if (IsOwner)
-        {
-            // Assign appearance based on whether this is the host or client
-            int index = NetworkManager.Singleton.IsHost ? 0 : 1;
-            Debug.Log($"[PlayerAppearanceManager] Setting appearance index to {index}");
-            SetAppearanceServerRpc(index);
-        }
-
-        // Subscribe to changes in appearanceIndex
-        appearanceIndex.OnValueChanged += (oldValue, newValue) =>
-        {
-            Debug.Log($"[PlayerAppearanceManager] OnValueChanged triggered: oldValue={oldValue}, newValue={newValue}");
-            ApplyAppearance(newValue);
-        };
-    }
+    private NetworkVariable<int> appearanceIndex = new NetworkVariable<int>(0); // zmienna sieciowa do synchronizacji wygl¹du
 
     public override void OnNetworkSpawn()
     {
         base.OnNetworkSpawn();
 
-        // Apply the initial appearance when the player spawns
+        // ustaw wygl¹d w zale¿noœci od tego, czy to host, czy klient
+        if (IsOwner)
+        {
+            int index = NetworkManager.Singleton.IsHost ? 0 : 1; // host dostaje index 0, klient - 1
+            Debug.Log($"[PlayerAppearanceManager] Ustawianie wygl¹du na index {index}");
+            SetAppearanceServerRpc(index); // wysy³anie do serwera informacji o wybranym wygl¹dzie
+        }
+
+        // subskrypcja zmiany wygl¹du
+        appearanceIndex.OnValueChanged += (oldValue, newValue) =>
+        {
+            Debug.Log($"[PlayerAppearanceManager] Wygl¹d zmieniony: oldValue={oldValue}, newValue={newValue}");
+            ApplyAppearance(newValue); // zastosowanie nowego wygl¹du
+        };
+
+        // zastosowanie pocz¹tkowego wygl¹du po pojawieniu siê obiektu
         ApplyAppearance(appearanceIndex.Value);
     }
 
     private void ApplyAppearance(int index)
     {
+        // sprawdzanie, czy index jest poprawny i czy spriteRenderer istnieje
         if (spriteRenderer != null && sprites.Length > index)
         {
-            Debug.Log($"[PlayerAppearanceManager] Applying appearance for index {index}");
-            spriteRenderer.sprite = sprites[index];
+            Debug.Log($"[PlayerAppearanceManager] Stosowanie wygl¹du dla indexu {index}");
+            spriteRenderer.sprite = sprites[index]; // ustawianie odpowiedniego sprite'a
         }
         else
         {
-            Debug.LogWarning($"[PlayerAppearanceManager] Invalid index {index} or sprites array is empty!");
+            Debug.LogWarning($"[PlayerAppearanceManager] Nieprawid³owy index {index} lub tablica sprite'ów jest pusta!");
         }
     }
 
     [ServerRpc]
     private void SetAppearanceServerRpc(int index)
     {
-        Debug.Log($"[PlayerAppearanceManager] ServerRpc called to set appearance index to {index}");
-        appearanceIndex.Value = index;
+        Debug.Log($"[PlayerAppearanceManager] ServerRpc: ustawianie indexu wygl¹du na {index}");
+        appearanceIndex.Value = index; // ustawienie zmiennej sieciowej
 
-        // Immediately apply the appearance on the host
+        // natychmiastowe zastosowanie wygl¹du, jeœli to host
         if (IsHost)
         {
             ApplyAppearance(index);
