@@ -12,6 +12,8 @@ public class PlayerMovement : NetworkBehaviour
     [SerializeField] private Rigidbody2D rb; // komponent Rigidbody2D do sterowania fizyk¹
     [SerializeField] private Transform groundCheck; // pozycja, która sprawdza, czy postaæ stoi na ziemi
     [SerializeField] private LayerMask groundLayer; // warstwa definiuj¹ca ziemiê
+    [SerializeField] private Transform flipTransform; //obiekt zmieniaj¹cy rotacje/skale 
+
 
     private NetworkVariable<bool> isFacingRightNetwork = new NetworkVariable<bool>(true, NetworkVariableReadPermission.Everyone, NetworkVariableWritePermission.Server); // zmienna sieciowa do synchronizacji kierunku postaci
 
@@ -84,9 +86,12 @@ public class PlayerMovement : NetworkBehaviour
     private void ApplyFacingDirection(bool facingRight)
     {
         // zmiana kierunku patrzenia na podstawie wartoœci facingRight
-        Vector3 localScale = transform.localScale;
+        /*Vector3 localScale = transform.localScale;
         localScale.x = facingRight ? Mathf.Abs(localScale.x) : -Mathf.Abs(localScale.x);
-        transform.localScale = localScale;
+        transform.localScale = localScale;*/
+        var localScale = flipTransform.localScale;
+        localScale.x = facingRight ? 1f : -1f;
+        flipTransform.localScale = localScale;
     }
 
     [ServerRpc]
